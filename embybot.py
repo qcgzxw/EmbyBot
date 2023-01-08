@@ -80,7 +80,7 @@ async def invite(tgid=0, message=''):
     else:
         code_used = f"UPDATE `{db_name}`.`invite_code` SET `used`='T' WHERE  `code`='{code}';"
         cursor.execute(code_used)  # set the code has been used
-        conn.commit()
+        db_commit()
         pd_invite_code = pd.read_sql_query('select * from invite_code;', engine)
         pd_user = pd.read_sql_query('select * from user;', engine)
         tgid_find = (pd_user['tgid'] == tgid)
@@ -94,7 +94,7 @@ async def invite(tgid=0, message=''):
             return 'C'
         setcanrig = f"UPDATE `{db_name}`.`user` SET `canrig`='T' WHERE  `tgid`='{tgid}';"
         cursor.execute(setcanrig)  # update the status that can register
-        conn.commit()
+        db_commit()
         pd_invite_code = pd.read_sql_query('select * from invite_code;', engine)
         pd_user = pd.read_sql_query('select * from user;', engine)
         return 'C'  # done
@@ -204,12 +204,14 @@ def userinfo(tgid=0):
         bantime = expired
     if emby_name != 'None':
         r = requests.get(f"{embyurl}/emby/users/{emby_id}?api_key={embyapi}").text
-        r = json.loads(r)
         try:
+            r = json.loads(r)
             lastacttime = r['LastActivityDate']
             createdtime = r['DateCreated']
             lastacttime = LocalTime(time=lastacttime)
             createdtime = LocalTime(time=createdtime)
+        except json.decoder.JSONDecodeError:
+            return 'NotInTheDatabase'
         except KeyError:
             lastacttime = 'None'
             createdtime = 'None'
@@ -223,6 +225,13 @@ def prichat(message=''):
         return True
     else:
         return False
+
+
+# 临时修改，提交之后关闭指针和数据库连接
+def db_commit():
+    conn.commit()
+    cursor.close()
+    conn.close()
 
 
 async def BanEmby(tgid=0, message='', replyid=0):
@@ -258,13 +267,13 @@ async def BanEmby(tgid=0, message='', replyid=0):
                           params=params, data=data)  # update policy
             setbantime = f"UPDATE `{db_name}`.`user` SET `bantime`={int(time.time())} WHERE  `tgid`='{tgid}';"
             cursor.execute(setbantime)  # update the status that cannot register
-            conn.commit()
+            db_commit()
             return 'A', emby_name  # Ban the user's emby account
         else:
             if canrig(tgid=replyid):
                 setcanrig = f"UPDATE `{db_name}`.`user` SET `canrig`='F' WHERE  `tgid`='{replyid}';"
                 cursor.execute(setcanrig)  # update the status that cannot register
-                conn.commit()
+                db_commit()
                 return 'C', 'CannotReg'  # set cannot register
             else:
                 return 'D', 'DoNothing'  # do nothing
@@ -305,7 +314,7 @@ async def UnbanEmby(tgid=0, message='', replyid=0):
                           params=params, data=data)  # update policy
             setbantime = f"UPDATE `{db_name}`.`user` SET `bantime`={0} WHERE  `tgid`='{tgid}';"
             cursor.execute(setbantime)  # update the status that cannot register
-            conn.commit()
+            db_commit()
             return 'A', emby_name  # Unban the user's emby account
         else:
             return 'C', 'DoNothing'  # do nothing
@@ -367,7 +376,7 @@ async def create(tgid=0, message=''):  # register with invite code
     cursor.execute(sqlcanrig)
     cursor.execute(sqlemby_name)
     cursor.execute(sqlemby_id)
-    conn.commit()  # write it into database
+    db_commit()  # write it into database
     pd_invite_code = pd.read_sql_query('select * from invite_code;', engine)
     pd_user = pd.read_sql_query('select * from user;', engine)
     return r['Name'], NewPw
@@ -428,7 +437,7 @@ async def create_time(tgid=0, message=''):
         cursor.execute(sqlcanrig)
         cursor.execute(sqlemby_name)
         cursor.execute(sqlemby_id)
-        conn.commit()  # write it into database
+        db_commit()  # write it into database
         pd_invite_code = pd.read_sql_query('select * from invite_code;', engine)
         pd_user = pd.read_sql_query('select * from user;', engine)
         return r['Name'], NewPw
@@ -495,7 +504,7 @@ async def create_user(tgid=0, message=''):
         cursor.execute(sqlcanrig)
         cursor.execute(sqlemby_name)
         cursor.execute(sqlemby_id)
-        conn.commit()  # write it into database
+        db_commit()  # write it into database
         pd_invite_code = pd.read_sql_query('select * from invite_code;', engine)
         pd_user = pd.read_sql_query('select * from user;', engine)
         write_conofig(config='register_public_user', parms=register_public_user - 1)
@@ -516,7 +525,7 @@ def load_config(config=''):
 def write_conofig(config='', parms=''):
     code_used = f"UPDATE `{db_name}`.`config` SET `{config}`='{parms}' WHERE  `id`='1';"
     cursor.execute(code_used)
-    conn.commit()
+    db_commit()
     return 'OK'
 
 
@@ -669,7 +678,7 @@ async def my_handler(client, message):
     elif text == '/line' or text == f'/line{bot_name}':
         if prichat(message=message):
             if hadname(tgid=tgid) == 'B':
-                await message.reply(line)
+                await message.reply(line, disable_web_page_preview=True)
             else:
                 await message.reply('无Emby账号无法查看线路')
         else:
