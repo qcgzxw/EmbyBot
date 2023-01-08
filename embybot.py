@@ -5,20 +5,40 @@ import json
 import string
 import pandas as pd
 from sqlalchemy import create_engine
-import pymysql
 import time
 import uuid
 import random
 from datetime import datetime, timedelta
 from config import *
 
+
 app = Client("my_bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)  # create tg bot
-engine = create_engine(f'mysql+pymysql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}')
-conn = pymysql.connect(host=db_host, user=db_user, password=db_password, database=db_name, port=db_port)
-cursor = conn.cursor()  # create database connect
-pd_invite_code = pd.read_sql_query('select * from invite_code;', engine)
-pd_config = pd.read_sql_query('select * from config;', engine)
-pd_user = pd.read_sql_query('select * from user;', engine)  # setup
+engine = create_engine(
+    f'mysql+pymysql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}',
+    pool_size=20,
+    pool_recycle=3600
+)
+pd_invite_code = None
+pd_config = None
+pd_user = None
+
+
+def db_execute(raw=''):
+    if raw == '':
+        return
+
+    with engine.connect() as connection:
+        result = connection.execute(raw)
+        return result
+
+
+def pd_read_sql_query(raw=''):
+    with engine.connect() as conn:
+        return pd.read_sql_query(raw, conn)
+
+
+def pd_to_sql(df_write, table, **kwargs):
+    df_write.to_sql(table, engine, **kwargs)
 
 
 def IsAdmin(tgid=0):  # TODO change it in database
@@ -48,7 +68,7 @@ async def CreateCode(tgid=0):
     if IsAdmin(tgid=tgid):  # If you are a admin, you can create a code
         code = f'register-{str(uuid.uuid4())}'
         df_write = pd.DataFrame({'code': code, 'tgid': tgid, 'time': int(time.time()), 'used': 'F'}, index=[0])
-        df_write.to_sql('invite_code', engine, index=False, if_exists='append')
+        pd_to_sql(df_write, 'invite_code', index=False, if_exists='append')
         return code
     else:
         return 'A'  # not an admin that cannot use this command
@@ -57,12 +77,12 @@ async def CreateCode(tgid=0):
 async def invite(tgid=0, message=''):
     global pd_user
     global pd_invite_code
-    pd_invite_code = pd.read_sql_query('select * from invite_code;', engine)
-    pd_user = pd.read_sql_query('select * from user;', engine)
+    pd_invite_code = pd_read_sql_query('select * from invite_code;')
+    pd_user = pd_read_sql_query('select * from user;')
     if canrig(tgid=tgid) == 'B' or hadname(tgid=tgid) == 'B':
         return 'D'  # have an account or have the chance to register
-    pd_invite_code = pd.read_sql_query('select * from invite_code;', engine)
-    pd_user = pd.read_sql_query('select * from user;', engine)
+    pd_invite_code = pd_read_sql_query('select * from invite_code;')
+    pd_user = pd_read_sql_query('select * from user;')
     message = message.split(' ')
     code = message[-1]  # get the code
     code_find = (pd_invite_code['code'] == code)
@@ -79,32 +99,30 @@ async def invite(tgid=0, message=''):
         return 'B'  # the code has been used
     else:
         code_used = f"UPDATE `{db_name}`.`invite_code` SET `used`='T' WHERE  `code`='{code}';"
-        cursor.execute(code_used)  # set the code has been used
-        db_commit()
-        pd_invite_code = pd.read_sql_query('select * from invite_code;', engine)
-        pd_user = pd.read_sql_query('select * from user;', engine)
+        db_execute(code_used)  # set the code has been used
+        pd_invite_code = pd_read_sql_query('select * from invite_code;')
+        pd_user = pd_read_sql_query('select * from user;')
         tgid_find = (pd_user['tgid'] == tgid)
         try:
             tgid = int(pd_user[tgid_find]['tgid'])  # find the tgid if the user is in the databse
         except TypeError:
             df_write = pd.DataFrame({'tgid': tgid, 'admin': 'F', 'canrig': 'T'}, index=[0])
-            df_write.to_sql('user', engine, index=False, if_exists='append')  # add the user info
-            pd_invite_code = pd.read_sql_query('select * from invite_code;', engine)
-            pd_user = pd.read_sql_query('select * from user;', engine)
+            pd_to_sql(df_write, 'user', index=False, if_exists='append')  # add the user info
+            pd_invite_code = pd_read_sql_query('select * from invite_code;')
+            pd_user = pd_read_sql_query('select * from user;')
             return 'C'
         setcanrig = f"UPDATE `{db_name}`.`user` SET `canrig`='T' WHERE  `tgid`='{tgid}';"
-        cursor.execute(setcanrig)  # update the status that can register
-        db_commit()
-        pd_invite_code = pd.read_sql_query('select * from invite_code;', engine)
-        pd_user = pd.read_sql_query('select * from user;', engine)
+        db_execute(setcanrig)  # update the status that can register
+        pd_invite_code = pd_read_sql_query('select * from invite_code;')
+        pd_user = pd_read_sql_query('select * from user;')
         return 'C'  # done
 
 
 def canrig(tgid=0):
     global pd_user
     global pd_invite_code
-    pd_invite_code = pd.read_sql_query('select * from invite_code;', engine)
-    pd_user = pd.read_sql_query('select * from user;', engine)
+    pd_invite_code = pd_read_sql_query('select * from invite_code;')
+    pd_user = pd_read_sql_query('select * from user;')
     tgid_find = (pd_user['tgid'] == tgid)
     tgid = (pd_user[tgid_find]['tgid'])
     tgid = tgid.to_list()
@@ -127,8 +145,8 @@ def canrig(tgid=0):
 def hadname(tgid=0):
     global pd_user
     global pd_invite_code
-    pd_invite_code = pd.read_sql_query('select * from invite_code;', engine)
-    pd_user = pd.read_sql_query('select * from user;', engine)
+    pd_invite_code = pd_read_sql_query('select * from invite_code;')
+    pd_user = pd_read_sql_query('select * from user;')
     tgid_find = (pd_user['tgid'] == tgid)
     tgid = (pd_user[tgid_find]['tgid'])
     tgid = tgid.to_list()
@@ -150,6 +168,8 @@ async def register_all_time(tgid=0, message=''):  # public register
 
     if IsAdmin(tgid=tgid):
         message = message.split(' ')
+        if len(message) == 0:
+            return 'B'
         message = message[-1]
         write_conofig(config='register_public', parms='True')
         write_conofig(config='register_public_time', parms=int(time.time()) + (int(message) * 60))
@@ -163,9 +183,12 @@ async def register_all_time(tgid=0, message=''):  # public register
 async def register_all_user(tgid=0, message=''):
     if IsAdmin(tgid=tgid):
         message = message.split(' ')
+        if len(message) == 1:
+            return 'B'
         message = message[-1]
+
         write_conofig(config='register_public', parms='True')
-        write_conofig(config='register_public_user', parms=int(message))
+        write_conofig(config='register_public_user', parms=str(int(message)))
         write_conofig(config='register_method', parms='User')
         return int(message)
     else:
@@ -175,8 +198,8 @@ async def register_all_user(tgid=0, message=''):
 def userinfo(tgid=0):
     global pd_user
     global pd_invite_code
-    pd_invite_code = pd.read_sql_query('select * from invite_code;', engine)
-    pd_user = pd.read_sql_query('select * from user;', engine)
+    pd_invite_code = pd_read_sql_query('select * from invite_code;')
+    pd_user = pd_read_sql_query('select * from user;')
     tgid_find = (pd_user['tgid'] == tgid)
     tgid_a = (pd_user[tgid_find]['tgid'])
     tgid_a = tgid_a.to_list()
@@ -227,21 +250,13 @@ def prichat(message=''):
         return False
 
 
-# 临时修改，提交之后关闭指针和数据库连接
-def db_commit():
-    conn.commit()
-    cursor.close()
-    conn.close()
-
-
 async def BanEmby(tgid=0, message='', replyid=0):
     if IsAdmin(tgid=tgid):
         if hadname(tgid=replyid) == 'B':
             global pd_user
             global pd_invite_code
-            pd_invite_code = pd.read_sql_query('select * from invite_code;',
-                                               engine)
-            pd_user = pd.read_sql_query('select * from user;', engine)
+            pd_invite_code = pd_read_sql_query('select * from invite_cod;')
+            pd_user = pd_read_sql_query('select * from user;')
             tgid_find = (pd_user['tgid'] == replyid)
             tgid_a = (pd_user[tgid_find]['tgid'])
             tgid_a = tgid_a.to_list()
@@ -266,14 +281,12 @@ async def BanEmby(tgid=0, message='', replyid=0):
                           headers=headers,
                           params=params, data=data)  # update policy
             setbantime = f"UPDATE `{db_name}`.`user` SET `bantime`={int(time.time())} WHERE  `tgid`='{tgid}';"
-            cursor.execute(setbantime)  # update the status that cannot register
-            db_commit()
+            db_execute(setbantime)  # update the status that cannot register
             return 'A', emby_name  # Ban the user's emby account
         else:
             if canrig(tgid=replyid):
                 setcanrig = f"UPDATE `{db_name}`.`user` SET `canrig`='F' WHERE  `tgid`='{replyid}';"
-                cursor.execute(setcanrig)  # update the status that cannot register
-                db_commit()
+                db_execute(setcanrig)  # update the status that cannot register
                 return 'C', 'CannotReg'  # set cannot register
             else:
                 return 'D', 'DoNothing'  # do nothing
@@ -286,9 +299,8 @@ async def UnbanEmby(tgid=0, message='', replyid=0):
         if hadname(tgid=replyid) == 'B':
             global pd_user
             global pd_invite_code
-            pd_invite_code = pd.read_sql_query('select * from invite_code;',
-                                               engine)
-            pd_user = pd.read_sql_query('select * from user;', engine)
+            pd_invite_code = pd_read_sql_query('select * from invite_cod;')
+            pd_user = pd_read_sql_query('select * from user;')
             tgid_find = (pd_user['tgid'] == replyid)
             tgid_a = (pd_user[tgid_find]['tgid'])
             tgid_a = tgid_a.to_list()
@@ -313,8 +325,7 @@ async def UnbanEmby(tgid=0, message='', replyid=0):
                           headers=headers,
                           params=params, data=data)  # update policy
             setbantime = f"UPDATE `{db_name}`.`user` SET `bantime`={0} WHERE  `tgid`='{tgid}';"
-            cursor.execute(setbantime)  # update the status that cannot register
-            db_commit()
+            db_execute(setbantime)  # update the status that cannot register
             return 'A', emby_name  # Unban the user's emby account
         else:
             return 'C', 'DoNothing'  # do nothing
@@ -325,8 +336,8 @@ async def UnbanEmby(tgid=0, message='', replyid=0):
 async def create(tgid=0, message=''):  # register with invite code
     global pd_user
     global pd_invite_code
-    pd_invite_code = pd.read_sql_query('select * from invite_code;', engine)
-    pd_user = pd.read_sql_query('select * from user;', engine)
+    pd_invite_code = pd_read_sql_query('select * from invite_code;')
+    pd_user = pd_read_sql_query('select * from user;')
     if hadname(tgid=tgid) == 'B':
         return 'A'  # already have an account
     if canrig(tgid=tgid) != 'B':
@@ -354,8 +365,8 @@ async def create(tgid=0, message=''):  # register with invite code
     NewPw = ''.join(random.sample(string.ascii_letters + string.digits, 8))
     data = '{"CurrentPw":"" , "NewPw":"' + NewPw + '","ResetPassword" : false}'
     requests.post(f"{embyurl}/emby/users/{r['Id']}/Password?api_key={embyapi}", headers=headers, data=data)
-    pd_invite_code = pd.read_sql_query('select * from invite_code;', engine)
-    pd_user = pd.read_sql_query('select * from user;', engine)
+    pd_invite_code = pd_read_sql_query('select * from invite_code;')
+    pd_user = pd_read_sql_query('select * from user;')
     tgid_find = (pd_user['tgid'] == tgid)
     tgid_a = (pd_user[tgid_find]['tgid'])
     tgid_a = tgid_a.to_list()
@@ -367,18 +378,16 @@ async def create(tgid=0, message=''):  # register with invite code
         df_write = pd.DataFrame(
             {'tgid': tgid, 'admin': 'F', 'emby_name': str(r['Name']),
              'emby_id': str(r['Id']), 'canrig': 'F'}, index=[0])
-        df_write.to_sql('user', engine, index=False,
-                        if_exists='append')  # add the user info
+        pd_to_sql(df_write, 'user', index=False, if_exists='append')  # add the user info
         return r['Name'], NewPw
     sqlemby_name = f"UPDATE `{db_name}`.`user` SET `emby_name`='{r['Name']}' WHERE  `tgid`='{tgid}';"
     sqlcanrig = f"UPDATE `{db_name}`.`user` SET `canrig`='F' WHERE  `tgid`={tgid};"
     sqlemby_id = f"UPDATE `{db_name}`.`user` SET `emby_id`='{r['Id']}' WHERE  `tgid`='{tgid}';"
-    cursor.execute(sqlcanrig)
-    cursor.execute(sqlemby_name)
-    cursor.execute(sqlemby_id)
-    db_commit()  # write it into database
-    pd_invite_code = pd.read_sql_query('select * from invite_code;', engine)
-    pd_user = pd.read_sql_query('select * from user;', engine)
+    db_execute(sqlcanrig)
+    db_execute(sqlemby_name)
+    db_execute(sqlemby_id)
+    pd_invite_code = pd_read_sql_query('select * from invite_code;')
+    pd_user = pd_read_sql_query('select * from user;')
     return r['Name'], NewPw
 
 
@@ -387,8 +396,8 @@ async def create_time(tgid=0, message=''):
     global pd_invite_code
     register_public_time = load_config(config='register_public_time')
     if int(time.time()) < register_public_time:
-        pd_invite_code = pd.read_sql_query('select * from invite_code;', engine)
-        pd_user = pd.read_sql_query('select * from user;', engine)
+        pd_invite_code = pd_read_sql_query('select * from invite_code;')
+        pd_user = pd_read_sql_query('select * from user;')
         if hadname(tgid=tgid) == 'B':
             return 'A'  # already have an account
         message = message.split(' ')
@@ -417,8 +426,8 @@ async def create_time(tgid=0, message=''):
         data = '{"CurrentPw":"" , "NewPw":"' + NewPw + '","ResetPassword" : false}'
         requests.post(f"{embyurl}/emby/users/{r['Id']}/Password?api_key={embyapi}",
                       headers=headers, data=data)
-        pd_invite_code = pd.read_sql_query('select * from invite_code;', engine)
-        pd_user = pd.read_sql_query('select * from user;', engine)
+        pd_invite_code = pd_read_sql_query('select * from invite_code;')
+        pd_user = pd_read_sql_query('select * from user;')
         tgid_find = (pd_user['tgid'] == tgid)
         tgid_a = (pd_user[tgid_find]['tgid'])
         tgid_a = tgid_a.to_list()
@@ -429,17 +438,16 @@ async def create_time(tgid=0, message=''):
             df_write = pd.DataFrame(
                 {'tgid': tgid, 'admin': 'F', 'emby_name': str(r['Name']), 'emby_id': str(r['Id']), 'canrig': 'F'},
                 index=[0])
-            df_write.to_sql('user', engine, index=False, if_exists='append')  # add the user info
+            pd_to_sql(df_write, 'user', index=False, if_exists='append')  # add the user info
             return r['Name'], NewPw
         sqlemby_name = f"UPDATE `{db_name}`.`user` SET `emby_name`='{r['Name']}' WHERE  `tgid`='{tgid}';"
         sqlcanrig = f"UPDATE `{db_name}`.`user` SET `canrig`='F' WHERE  `tgid`={tgid};"
         sqlemby_id = f"UPDATE `{db_name}`.`user` SET `emby_id`='{r['Id']}' WHERE  `tgid`='{tgid}';"
-        cursor.execute(sqlcanrig)
-        cursor.execute(sqlemby_name)
-        cursor.execute(sqlemby_id)
-        db_commit()  # write it into database
-        pd_invite_code = pd.read_sql_query('select * from invite_code;', engine)
-        pd_user = pd.read_sql_query('select * from user;', engine)
+        db_execute(sqlcanrig)
+        db_execute(sqlemby_name)
+        db_execute(sqlemby_id)
+        pd_invite_code = pd_read_sql_query('select * from invite_code;')
+        pd_user = pd_read_sql_query('select * from user;')
         return r['Name'], NewPw
     else:
         register_method = 'None'
@@ -453,8 +461,8 @@ async def create_user(tgid=0, message=''):
     global pd_invite_code
     register_public_user = load_config(config='register_public_user')
     if register_public_user > 0:
-        pd_invite_code = pd.read_sql_query('select * from invite_code;', engine)
-        pd_user = pd.read_sql_query('select * from user;', engine)
+        pd_invite_code = pd_read_sql_query('select * from invite_code;')
+        pd_user = pd_read_sql_query('select * from user;')
         if hadname(tgid=tgid) == 'B':
             return 'A'  # already have an account
         message = message.split(' ')
@@ -483,8 +491,8 @@ async def create_user(tgid=0, message=''):
         data = '{"CurrentPw":"" , "NewPw":"' + NewPw + '","ResetPassword" : false}'
         requests.post(f"{embyurl}/emby/users/{r['Id']}/Password?api_key={embyapi}",
                       headers=headers, data=data)
-        pd_invite_code = pd.read_sql_query('select * from invite_code;', engine)
-        pd_user = pd.read_sql_query('select * from user;', engine)
+        pd_invite_code = pd_read_sql_query('select * from invite_code;')
+        pd_user = pd_read_sql_query('select * from user;')
         tgid_find = (pd_user['tgid'] == tgid)
         tgid_a = (pd_user[tgid_find]['tgid'])
         tgid_a = tgid_a.to_list()
@@ -495,18 +503,17 @@ async def create_user(tgid=0, message=''):
             df_write = pd.DataFrame(
                 {'tgid': tgid, 'admin': 'F', 'emby_name': str(r['Name']), 'emby_id': str(r['Id']), 'canrig': 'F'},
                 index=[0])
-            df_write.to_sql('user', engine, index=False, if_exists='append')  # add the user info
+            pd_to_sql(df_write, 'user', index=False, if_exists='append')  # add the user info
             write_conofig(config='register_public_user', parms=register_public_user - 1)
             return r['Name'], NewPw
         sqlemby_name = f"UPDATE `{db_name}`.`user` SET `emby_name`='{r['Name']}' WHERE  `tgid`='{tgid}';"
         sqlcanrig = f"UPDATE `{db_name}`.`user` SET `canrig`='F' WHERE  `tgid`={tgid};"
         sqlemby_id = f"UPDATE `{db_name}`.`user` SET `emby_id`='{r['Id']}' WHERE  `tgid`='{tgid}';"
-        cursor.execute(sqlcanrig)
-        cursor.execute(sqlemby_name)
-        cursor.execute(sqlemby_id)
-        db_commit()  # write it into database
-        pd_invite_code = pd.read_sql_query('select * from invite_code;', engine)
-        pd_user = pd.read_sql_query('select * from user;', engine)
+        db_execute(sqlcanrig)
+        db_execute(sqlemby_name)
+        db_execute(sqlemby_id)
+        pd_invite_code = pd_read_sql_query('select * from invite_code;')
+        pd_user = pd_read_sql_query('select * from user;')
         write_conofig(config='register_public_user', parms=register_public_user - 1)
         return r['Name'], NewPw
     else:
@@ -517,15 +524,14 @@ async def create_user(tgid=0, message=''):
 
 def load_config(config=''):
     global pd_config
-    pd_config = pd.read_sql_query('select * from config;', engine)
+    pd_config = pd_read_sql_query('select * from config;')
     re = pd_config.at[0, config]
     return re
 
 
 def write_conofig(config='', parms=''):
     code_used = f"UPDATE `{db_name}`.`config` SET `{config}`='{parms}' WHERE  `id`='1';"
-    cursor.execute(code_used)
-    db_commit()
+    db_execute(code_used)
     return 'OK'
 
 
@@ -602,6 +608,8 @@ async def my_handler(client, message):
         re = await register_all_time(tgid=tgid, message=text)
         if re == 'A':
             await message.reply('您不是管理员，请勿随意使用管理命令')
+        elif re == 'B':
+            await message.reply('参数为空')
         else:
             expired = time.localtime(re)
             expired = time.strftime("%Y/%m/%d %H:%M:%S", expired)
@@ -639,6 +647,8 @@ async def my_handler(client, message):
         re = await register_all_user(tgid=tgid, message=text)
         if re == 'A':
             await message.reply('您不是管理员，请勿随意使用管理命令')
+        elif re == 'B':
+            await message.reply('参数为空')
         else:
             await message.reply(f"注册已开放，本次共有{re}个名额")
     elif str(text).find('/ban_emby') == 0:
