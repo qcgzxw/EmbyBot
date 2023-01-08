@@ -16,7 +16,7 @@ app = Client("my_bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)  #
 engine = create_engine(
     f'mysql+pymysql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}',
     pool_size=20,
-    pool_recycle=1
+    pool_recycle=3600
 )
 pd_invite_code = None
 pd_config = None
