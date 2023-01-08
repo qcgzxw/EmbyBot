@@ -10,28 +10,11 @@ import time
 import uuid
 import random
 from datetime import datetime, timedelta
-
-
-
-bot_token = "xxx"
-db_user = 'xxx'
-db_password = 'xxx'
-db_name = 'xxx'
-bot_name = '@xxx'
-api_id = 99999999
-api_hash = "xxx"
-embyurl = 'xxx'
-embyapi = 'xxx'
-groupid = -100
-channelid = -100
-admin_list = [111]
-ban_channel_id = -100
-line = 'xxx'  # config
-
+from config import *
 
 app = Client("my_bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)  # create tg bot
-engine = create_engine(f'mysql+pymysql://{db_user}:{db_password}@localhost:3306/{db_name}')
-conn = pymysql.connect(host='localhost', user=db_user, password=db_password, database=db_name, port=3306)
+engine = create_engine(f'mysql+pymysql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}')
+conn = pymysql.connect(host=db_host, user=db_user, password=db_password, database=db_name, port=db_port)
 cursor = conn.cursor()  # create database connect
 pd_invite_code = pd.read_sql_query('select * from invite_code;', engine)
 pd_config = pd.read_sql_query('select * from config;', engine)
@@ -161,26 +144,28 @@ def hadname(tgid=0):
     else:
         return 'C'  # does not have an account
 
+
 # TODO put the time into the database
 async def register_all_time(tgid=0, message=''):  # public register
 
     if IsAdmin(tgid=tgid):
         message = message.split(' ')
         message = message[-1]
-        write_conofig(config='register_public',parms='True')
-        write_conofig(config='register_public_time',parms=int(time.time())+(int(message)*60))
+        write_conofig(config='register_public', parms='True')
+        write_conofig(config='register_public_time', parms=int(time.time()) + (int(message) * 60))
         write_conofig(config='register_method', parms='Time')
-        return int(time.time())+(int(message)*60)
+        return int(time.time()) + (int(message) * 60)
     else:
         return 'A'  # not an admin
 
-#TODO put the user into the database
+
+# TODO put the user into the database
 async def register_all_user(tgid=0, message=''):
     if IsAdmin(tgid=tgid):
         message = message.split(' ')
         message = message[-1]
         write_conofig(config='register_public', parms='True')
-        write_conofig(config='register_public_user',parms=int(message))
+        write_conofig(config='register_public_user', parms=int(message))
         write_conofig(config='register_method', parms='User')
         return int(message)
     else:
@@ -341,14 +326,14 @@ async def create(tgid=0, message=''):  # register with invite code
     name = message[-1]
     if name == '' or name == ' ':
         return 'B'  # do not input a name
-    data = '{"Name":"'+name+'","HasPassword":true}'
+    data = '{"Name":"' + name + '","HasPassword":true}'
     params = (('api_key', embyapi),
               )
     headers = {
         'accept': 'application/json',
         'Content-Type': 'application/json',
     }
-    r = requests.post(url=embyurl+'/emby/Users/New', headers=headers, params=params, data=data).text
+    r = requests.post(url=embyurl + '/emby/Users/New', headers=headers, params=params, data=data).text
     try:
         r = json.loads(r)  # create a new user
     except json.decoder.JSONDecodeError:
@@ -358,7 +343,7 @@ async def create(tgid=0, message=''):  # register with invite code
     requests.post(embyurl + '/emby/Users/' + r['Id'] + '/Policy', headers=headers,
                   params=params, data=data1)  # update policy
     NewPw = ''.join(random.sample(string.ascii_letters + string.digits, 8))
-    data = '{"CurrentPw":"" , "NewPw":"'+NewPw+'","ResetPassword" : false}'
+    data = '{"CurrentPw":"" , "NewPw":"' + NewPw + '","ResetPassword" : false}'
     requests.post(f"{embyurl}/emby/users/{r['Id']}/Password?api_key={embyapi}", headers=headers, data=data)
     pd_invite_code = pd.read_sql_query('select * from invite_code;', engine)
     pd_user = pd.read_sql_query('select * from user;', engine)
@@ -432,8 +417,10 @@ async def create_time(tgid=0, message=''):
         try:
             tgid_a = int(pd_user[tgid_find]['tgid'])  # find the tgid if the user is in the databse
         except TypeError:
-            df_write = pd.DataFrame({'tgid': tgid, 'admin': 'F','emby_name': str(r['Name']), 'emby_id': str(r['Id']), 'canrig': 'F'},index=[0])
-            df_write.to_sql('user', engine, index=False,if_exists='append')  # add the user info
+            df_write = pd.DataFrame(
+                {'tgid': tgid, 'admin': 'F', 'emby_name': str(r['Name']), 'emby_id': str(r['Id']), 'canrig': 'F'},
+                index=[0])
+            df_write.to_sql('user', engine, index=False, if_exists='append')  # add the user info
             return r['Name'], NewPw
         sqlemby_name = f"UPDATE `{db_name}`.`user` SET `emby_name`='{r['Name']}' WHERE  `tgid`='{tgid}';"
         sqlcanrig = f"UPDATE `{db_name}`.`user` SET `canrig`='F' WHERE  `tgid`={tgid};"
@@ -447,8 +434,8 @@ async def create_time(tgid=0, message=''):
         return r['Name'], NewPw
     else:
         register_method = 'None'
-        write_conofig(config='register_method',parms='None')
-        write_conofig(config='register_public_time',parms=0)
+        write_conofig(config='register_method', parms='None')
+        write_conofig(config='register_public_time', parms=0)
         return 'C'
 
 
@@ -496,9 +483,11 @@ async def create_user(tgid=0, message=''):
         try:
             tgid_a = int(pd_user[tgid_find]['tgid'])  # find the tgid if the user is in the databse
         except TypeError:
-            df_write = pd.DataFrame({'tgid': tgid, 'admin': 'F', 'emby_name': str(r['Name']), 'emby_id': str(r['Id']), 'canrig': 'F'}, index=[0])
+            df_write = pd.DataFrame(
+                {'tgid': tgid, 'admin': 'F', 'emby_name': str(r['Name']), 'emby_id': str(r['Id']), 'canrig': 'F'},
+                index=[0])
             df_write.to_sql('user', engine, index=False, if_exists='append')  # add the user info
-            write_conofig(config='register_public_user',parms=register_public_user - 1)
+            write_conofig(config='register_public_user', parms=register_public_user - 1)
             return r['Name'], NewPw
         sqlemby_name = f"UPDATE `{db_name}`.`user` SET `emby_name`='{r['Name']}' WHERE  `tgid`='{tgid}';"
         sqlcanrig = f"UPDATE `{db_name}`.`user` SET `canrig`='F' WHERE  `tgid`={tgid};"
@@ -509,35 +498,35 @@ async def create_user(tgid=0, message=''):
         conn.commit()  # write it into database
         pd_invite_code = pd.read_sql_query('select * from invite_code;', engine)
         pd_user = pd.read_sql_query('select * from user;', engine)
-        write_conofig(config='register_public_user',parms=register_public_user - 1)
+        write_conofig(config='register_public_user', parms=register_public_user - 1)
         return r['Name'], NewPw
     else:
         write_conofig(config='register_method', parms='None')
-        write_conofig(config='register_public_user',parms=0)
+        write_conofig(config='register_public_user', parms=0)
         return 'C'
 
 
 def load_config(config=''):
     global pd_config
     pd_config = pd.read_sql_query('select * from config;', engine)
-    re = pd_config.at[0,config]
+    re = pd_config.at[0, config]
     return re
 
 
-def write_conofig(config='',parms=''):
+def write_conofig(config='', parms=''):
     code_used = f"UPDATE `{db_name}`.`config` SET `{config}`='{parms}' WHERE  `id`='1';"
     cursor.execute(code_used)
     conn.commit()
     return 'OK'
 
+
 def ItemsCount():
     r = requests.get(f'{embyurl}/Items/Counts?api_key={embyapi}').text
-    r= json.loads(r)
+    r = json.loads(r)
     MovieCount = r['MovieCount']
     SeriesCount = r['SeriesCount']
     EpisodeCount = r['EpisodeCount']
-    return MovieCount,SeriesCount,EpisodeCount
-
+    return MovieCount, SeriesCount, EpisodeCount
 
 
 @app.on_message(filters.text)
@@ -545,18 +534,21 @@ async def my_handler(client, message):
     tgid = message.from_user.id
     text = str(message.text)
     if str(text) == '/new_code' or text == f'/new_code{bot_name}':
-            re = await CreateCode(tgid=tgid)
-            if re == 'A':
-                await message.reply('不是管理员请勿使用管理员命令')
+        re = await CreateCode(tgid=tgid)
+        if re == 'A':
+            await message.reply('不是管理员请勿使用管理员命令')
+        else:
+            if not IsReply(message=message):
+                await message.reply('邀请码生成成功')
+                await app.send_message(chat_id=tgid, text=f'生成成功，邀请码<code>{re}</code>')
             else:
-                if IsReply(message=message) == False:
-                    await message.reply('邀请码生成成功')
-                    await app.send_message(chat_id=tgid, text=f'生成成功，邀请码<code>{re}</code>')
-                else:
-                    replyid = IsReply(message=message)
-                    await message.reply('已为这个用户生成邀请码')
-                    await app.send_message(chat_id=replyid, text=f'生成成功，邀请码<code>{re}</code>')
-                    await app.send_message(chat_id=tgid, text=f'已为用户<a href="tg://user?id={replyid}">{replyid}</a>生成邀请码，邀请码<code>{re}</code>')
+                replyid = IsReply(message=message)
+                await message.reply('已为这个用户生成邀请码')
+                await app.send_message(chat_id=replyid, text=f'生成成功，邀请码<code>{re}</code>')
+                await app.send_message(
+                    chat_id=tgid,
+                    text=f'已为用户<a href="tg://user?id={replyid}">{replyid}</a>生成邀请码，邀请码<code>{re}</code>'
+                )
     elif str(text).find('/invite') == 0:
         if prichat(message=message):
             re = await invite(tgid=tgid, message=str(message.text))
@@ -582,9 +574,9 @@ async def my_handler(client, message):
                 if register_method == 'None':
                     re = await create(tgid=tgid, message=str(message.text))
                 elif register_method == 'User':
-                    re = await create_user(tgid=tgid,message=text)
+                    re = await create_user(tgid=tgid, message=text)
                 elif register_method == 'Time':
-                    re = await create_time(tgid=tgid,message=text)
+                    re = await create_time(tgid=tgid, message=text)
                 if re == 'A':
                     await message.reply('您已经注册过emby账号，请勿重复注册')
                 elif re == 'C':
@@ -614,7 +606,8 @@ async def my_handler(client, message):
                     await message.reply('用户未入库，无信息')
                 elif re[0] == 'HaveAnEmby':
                     await message.reply('用户信息已私发，请查看')
-                    await app.send_message(chat_id=tgid, text=f'用户<a href="tg://user?id={replyid}">{replyid}</a>的信息\nEmby Name: {re[1]}\n Emby ID: {re[2]}\n上次活动时间{re[3]}\n账号创建时间{re[4]}\n被ban时间{re[5]}')
+                    await app.send_message(chat_id=tgid,
+                                           text=f'用户<a href="tg://user?id={replyid}">{replyid}</a>的信息\nEmby Name: {re[1]}\n Emby ID: {re[2]}\n上次活动时间{re[3]}\n账号创建时间{re[4]}\n被ban时间{re[5]}')
                 elif re[0] == 'NotHaveAnEmby':
                     await message.reply(f'此用户没有emby账号，可注册：{re[1]}')
             else:
@@ -630,8 +623,9 @@ async def my_handler(client, message):
             elif re[0] == 'NotHaveAnEmby':
                 await message.reply(f'此用户没有emby账号，可注册：{re[1]}')
     elif str(text) == '/help' or str(text) == '/start' or text == f'/start{bot_name}' or text == f'/help{bot_name}':
-        await message.reply('用户命令：\n/invite + 邀请码 使用邀请码获取创建账号资格\n/create + 用户名 创建用户（用户名不可包含空格）\n/info 查看用户信息（仅可查看自己的信息）\n/line 查看线路\n/count 查看服务器内片子数量\n/help 输出'
-                            '本帮助\n管理命令：\n/new_code 创建新的邀请码 \n/register_all_time + 时间（分）开放注册，时长为指定时间\n/register_all_user + 人数 开放指定数量的注册名额\n/info 回复一位用户，查看他的信息\n/ban_emby 禁用一位用户的Emby账号\n/unban_emby 解禁一位用户的Emby账户')
+        await message.reply(
+            '用户命令：\n/invite + 邀请码 使用邀请码获取创建账号资格\n/create + 用户名 创建用户（用户名不可包含空格）\n/info 查看用户信息（仅可查看自己的信息）\n/line 查看线路\n/count 查看服务器内片子数量\n/help 输出'
+            '本帮助\n管理命令：\n/new_code 创建新的邀请码 \n/register_all_time + 时间（分）开放注册，时长为指定时间\n/register_all_user + 人数 开放指定数量的注册名额\n/info 回复一位用户，查看他的信息\n/ban_emby 禁用一位用户的Emby账号\n/unban_emby 解禁一位用户的Emby账户')
     elif str(text).find('/register_all_user') == 0:
         re = await register_all_user(tgid=tgid, message=text)
         if re == 'A':
@@ -644,7 +638,10 @@ async def my_handler(client, message):
             re = await BanEmby(tgid=tgid, message=message, replyid=replyid)
             if re[0] == 'A':
                 await message.reply(f'用户<a href="tg://user?id={replyid}">{replyid}</a>的Emby账号{re[1]}已被ban')
-                await app.send_message(chat_id=ban_channel_id, text=f'#Ban\n用户：<a href="tg://user?id={replyid}">{replyid}</a>\nEmby账号：{re[1]}\n原因：管理员封禁')
+                await app.send_message(
+                    chat_id=ban_channel_id,
+                    text=f'#Ban\n用户：<a href="tg://user?id={replyid}">{replyid}</a>\nEmby账号：{re[1]}\n原因：管理员封禁'
+                )
             elif re[0] == 'B':
                 await message.reply('请勿随意使用管理员命令')
             elif re[0] == 'C':
@@ -659,7 +656,10 @@ async def my_handler(client, message):
             re = await UnbanEmby(tgid=tgid, message=message, replyid=replyid)
             if re[0] == 'A':
                 await message.reply(f'用户<a href="tg://user?id={replyid}">{replyid}</a>的Emby账号{re[1]}已解除封禁')
-                await app.send_message(chat_id=ban_channel_id, text=f'#Unban\n用户：<a href="tg://user?id={replyid}">{replyid}</a>\nEmby账号：{re[1]}\n原因：管理员解封')
+                await app.send_message(
+                    chat_id=ban_channel_id,
+                    text=f'#Unban\n用户：<a href="tg://user?id={replyid}">{replyid}</a>\nEmby账号：{re[1]}\n原因：管理员解封'
+                )
             elif re[0] == 'B':
                 await message.reply('请勿随意使用管理员命令')
             elif re[0] == 'C':
@@ -682,7 +682,10 @@ async def my_handler(client, message):
             await message.reply('链接不符合规范')
         else:
             await message.reply('已发送请求')
-            await app.send_message(chat_id=ban_channel_id,text=f'#求片\n影片名 #{name}\nIMDB链接：<code>{url}</code>\nTGID <a href="tg://user?id={tgid}">{tgid}</a>')
+            await app.send_message(
+                chat_id=ban_channel_id,
+                text=f'#求片\n影片名 #{name}\nIMDB链接：<code>{url}</code>\nTGID <a href="tg://user?id={tgid}">{tgid}</a>'
+            )
     elif text == '/count' or text == f'/count{bot_name}':
         re = ItemsCount()
         await message.reply(f'🎬电影数量：{re[0]}\n📽️剧集数量：{re[1]}\n🎞️总集数：{re[2]}')
