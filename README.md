@@ -10,6 +10,8 @@
 
 ```
 bot_token = "xxx"            您的机器人令牌。从@BotFather获取
+db_host = 'localhost'        mysql数据库地址
+db_port = 3306               数据库端口
 db_user = 'xxx'              数据库用户
 db_password = 'xxx'          数据库密码
 db_name = 'xxx'              数据库名称
