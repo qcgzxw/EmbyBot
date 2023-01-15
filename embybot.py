@@ -171,9 +171,9 @@ async def register_all_time(tgid=0, message=''):  # public register
         if len(message) == 0:
             return 'B'
         message = message[-1]
-        write_conofig(config='register_public', parms='True')
-        write_conofig(config='register_public_time', parms=int(time.time()) + (int(message) * 60))
-        write_conofig(config='register_method', parms='Time')
+        write_config(config='register_public', parms='True')
+        write_config(config='register_public_time', parms=int(time.time()) + (int(message) * 60))
+        write_config(config='register_method', parms='Time')
         return int(time.time()) + (int(message) * 60)
     else:
         return 'A'  # not an admin
@@ -187,9 +187,9 @@ async def register_all_user(tgid=0, message=''):
             return 'B'
         message = message[-1]
 
-        write_conofig(config='register_public', parms='True')
-        write_conofig(config='register_public_user', parms=str(int(message)))
-        write_conofig(config='register_method', parms='User')
+        write_config(config='register_public', parms='True')
+        write_config(config='register_public_user', parms=str(int(message)))
+        write_config(config='register_method', parms='User')
         return int(message)
     else:
         return 'A'  # not an admin
@@ -451,8 +451,8 @@ async def create_time(tgid=0, message=''):
         return r['Name'], NewPw
     else:
         register_method = 'None'
-        write_conofig(config='register_method', parms='None')
-        write_conofig(config='register_public_time', parms=0)
+        write_config(config='register_method', parms='None')
+        write_config(config='register_public_time', parms=0)
         return 'C'
 
 
@@ -504,7 +504,7 @@ async def create_user(tgid=0, message=''):
                 {'tgid': tgid, 'admin': 'F', 'emby_name': str(r['Name']), 'emby_id': str(r['Id']), 'canrig': 'F'},
                 index=[0])
             pd_to_sql(df_write, 'user', index=False, if_exists='append')  # add the user info
-            write_conofig(config='register_public_user', parms=register_public_user - 1)
+            write_config(config='register_public_user', parms=register_public_user - 1)
             return r['Name'], NewPw
         sqlemby_name = f"UPDATE `{db_name}`.`user` SET `emby_name`='{r['Name']}' WHERE  `tgid`='{tgid}';"
         sqlcanrig = f"UPDATE `{db_name}`.`user` SET `canrig`='F' WHERE  `tgid`={tgid};"
@@ -514,11 +514,11 @@ async def create_user(tgid=0, message=''):
         db_execute(sqlemby_id)
         pd_invite_code = pd_read_sql_query('select * from invite_code;')
         pd_user = pd_read_sql_query('select * from user;')
-        write_conofig(config='register_public_user', parms=register_public_user - 1)
+        write_config(config='register_public_user', parms=register_public_user - 1)
         return r['Name'], NewPw
     else:
-        write_conofig(config='register_method', parms='None')
-        write_conofig(config='register_public_user', parms=0)
+        write_config(config='register_method', parms='None')
+        write_config(config='register_public_user', parms=0)
         return 'C'
 
 
@@ -529,7 +529,7 @@ def load_config(config=''):
     return re
 
 
-def write_conofig(config='', parms=''):
+def write_config(config='', parms=''):
     code_used = f"UPDATE `{db_name}`.`config` SET `{config}`='{parms}' WHERE  `id`='1';"
     db_execute(code_used)
     return 'OK'
@@ -639,10 +639,34 @@ async def my_handler(client, message):
                                        text=f'用户<a href="tg://user?id={tgid}">{tgid}</a>的信息\nEmby Name: {re[1]}\n Emby ID: {re[2]}\n上次活动时间{re[3]}\n账号创建时间{re[4]}\n被ban时间{re[5]}')
             elif re[0] == 'NotHaveAnEmby':
                 await message.reply(f'此用户没有emby账号，可注册：{re[1]}')
+    elif str(text) == '/library_refresh':
+        if IsAdmin(tgid=tgid):
+            requests.post(embyurl + '/Library/Refresh',
+                          headers={
+                              'accept': 'application/json',
+                              'Content-Type': 'application/json',
+                          },
+                          params=(('api_key', embyapi),)
+                          )
+        await message.reply("媒体库刷新中...")
     elif str(text) == '/help' or str(text) == '/start' or text == f'/start{bot_name}' or text == f'/help{bot_name}':
-        await message.reply(
-            '用户命令：\n/invite + 邀请码 使用邀请码获取创建账号资格\n/create + 用户名 创建用户（用户名不可包含空格）\n/info 查看用户信息（仅可查看自己的信息）\n/line 查看线路\n/count 查看服务器内片子数量\n/help 输出'
-            '本帮助\n管理命令：\n/new_code 创建新的邀请码 \n/register_all_time + 时间（分）开放注册，时长为指定时间\n/register_all_user + 人数 开放指定数量的注册名额\n/info 回复一位用户，查看他的信息\n/ban_emby 禁用一位用户的Emby账号\n/unban_emby 解禁一位用户的Emby账户')
+        help_message = '用户命令：\n'\
+                       '/invite + 邀请码 使用邀请码获取创建账号资格\n'\
+                       '/create + 用户名 创建用户（用户名不可包含空格）\n'\
+                       '/info 查看用户信息（仅可查看自己的信息）\n'\
+                       '/line 查看线路\n'\
+                       '/count 查看服务器内片子数量\n'\
+                       '/help 输出本帮助\n'
+        if IsAdmin(tgid=tgid):
+            help_message += '管理命令：\n'\
+                            '/library_refresh 刷新媒体库 \n'\
+                            '/new_code 创建新的邀请码 \n'\
+                            '/register_all_time + 时间（分）开放注册，时长为指定时间\n'\
+                            '/register_all_user + 人数 开放指定数量的注册名额\n'\
+                            '/info 回复一位用户，查看他的信息\n'\
+                            '/ban_emby 禁用一位用户的Emby账号\n'\
+                            '/unban_emby 解禁一位用户的Emby账户'
+        await message.reply(help_message)
     elif str(text).find('/register_all_user') == 0:
         re = await register_all_user(tgid=tgid, message=text)
         if re == 'A':
