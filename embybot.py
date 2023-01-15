@@ -171,9 +171,9 @@ async def register_all_time(tgid=0, message=''):  # public register
         if len(message) == 0:
             return 'B'
         message = message[-1]
-        write_conofig(config='register_public', parms='True')
-        write_conofig(config='register_public_time', parms=int(time.time()) + (int(message) * 60))
-        write_conofig(config='register_method', parms='Time')
+        write_config(config='register_public', parms='True')
+        write_config(config='register_public_time', parms=int(time.time()) + (int(message) * 60))
+        write_config(config='register_method', parms='Time')
         return int(time.time()) + (int(message) * 60)
     else:
         return 'A'  # not an admin
@@ -187,9 +187,9 @@ async def register_all_user(tgid=0, message=''):
             return 'B'
         message = message[-1]
 
-        write_conofig(config='register_public', parms='True')
-        write_conofig(config='register_public_user', parms=str(int(message)))
-        write_conofig(config='register_method', parms='User')
+        write_config(config='register_public', parms='True')
+        write_config(config='register_public_user', parms=str(int(message)))
+        write_config(config='register_method', parms='User')
         return int(message)
     else:
         return 'A'  # not an admin
@@ -451,8 +451,8 @@ async def create_time(tgid=0, message=''):
         return r['Name'], NewPw
     else:
         register_method = 'None'
-        write_conofig(config='register_method', parms='None')
-        write_conofig(config='register_public_time', parms=0)
+        write_config(config='register_method', parms='None')
+        write_config(config='register_public_time', parms=0)
         return 'C'
 
 
@@ -504,7 +504,7 @@ async def create_user(tgid=0, message=''):
                 {'tgid': tgid, 'admin': 'F', 'emby_name': str(r['Name']), 'emby_id': str(r['Id']), 'canrig': 'F'},
                 index=[0])
             pd_to_sql(df_write, 'user', index=False, if_exists='append')  # add the user info
-            write_conofig(config='register_public_user', parms=register_public_user - 1)
+            write_config(config='register_public_user', parms=register_public_user - 1)
             return r['Name'], NewPw
         sqlemby_name = f"UPDATE `{db_name}`.`user` SET `emby_name`='{r['Name']}' WHERE  `tgid`='{tgid}';"
         sqlcanrig = f"UPDATE `{db_name}`.`user` SET `canrig`='F' WHERE  `tgid`={tgid};"
@@ -514,11 +514,11 @@ async def create_user(tgid=0, message=''):
         db_execute(sqlemby_id)
         pd_invite_code = pd_read_sql_query('select * from invite_code;')
         pd_user = pd_read_sql_query('select * from user;')
-        write_conofig(config='register_public_user', parms=register_public_user - 1)
+        write_config(config='register_public_user', parms=register_public_user - 1)
         return r['Name'], NewPw
     else:
-        write_conofig(config='register_method', parms='None')
-        write_conofig(config='register_public_user', parms=0)
+        write_config(config='register_method', parms='None')
+        write_config(config='register_public_user', parms=0)
         return 'C'
 
 
@@ -529,7 +529,7 @@ def load_config(config=''):
     return re
 
 
-def write_conofig(config='', parms=''):
+def write_config(config='', parms=''):
     code_used = f"UPDATE `{db_name}`.`config` SET `{config}`='{parms}' WHERE  `id`='1';"
     db_execute(code_used)
     return 'OK'
