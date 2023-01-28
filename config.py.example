@@ -11,6 +11,7 @@ embyurl = 'xxx'
 embyapi = 'xxx'
 groupid = -100
 channelid = -100
+group_enter_message = "未加入群组提示消息"
 admin_list = [111]
 ban_channel_id = -100
 line = 'xxx'  # config
