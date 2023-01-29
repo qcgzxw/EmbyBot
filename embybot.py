@@ -1,4 +1,6 @@
 import asyncio
+import re
+
 from pyrogram import Client, filters
 import requests
 import json
@@ -21,6 +23,9 @@ engine = create_engine(
 pd_invite_code = None
 pd_config = None
 pd_user = None
+
+tg_group_members = None
+tg_channel_members = None
 
 
 def db_execute(raw=''):
@@ -344,7 +349,8 @@ async def create(tgid=0, message=''):  # register with invite code
         return 'C'  # cannot register
     message = message.split(' ')
     name = message[-1]
-    if name == '' or name == ' ':
+    name = "" if re.match('[a-zA-Z0-9_-]+', name) is None else re.match('[a-zA-Z0-9_-]+', name).group()
+    if name == '' or len(name) < 5:
         return 'B'  # do not input a name
     data = '{"Name":"' + name + '","HasPassword":true}'
     params = (('api_key', embyapi),
@@ -544,10 +550,63 @@ def ItemsCount():
     return MovieCount, SeriesCount, EpisodeCount
 
 
+async def refresh_group_members():
+    global tg_group_members
+    tg_group_members = {}
+    if groupid == -100:
+        return
+
+    async for member in app.get_chat_members(groupid):
+        if not member.user.is_restricted:
+            tg_group_members[member.user.id] = member
+        print(member)
+    print(tg_group_members)
+
+
+async def refresh_channel_members():
+    global tg_channel_members
+    tg_channel_members = {}
+    if channelid == -100:
+        return
+
+    async for member in app.get_chat_members(channelid):
+        if not member.user.is_restricted:
+            tg_channel_members[member.user.id] = member
+        print(member)
+    print(tg_channel_members)
+
+
+def allowed_commands(is_admin=False):
+    common_commands = ['/invite', '/create', '/info', '/bind', '/line', '/count', '/help']
+    admin_commands = ['/library_refresh', '/new_code', '/register_all_time', '/register_all_user', '/info', '/ban_emby', '/unban_emby']
+    return common_commands if not is_admin else common_commands+admin_commands
+
+
 @app.on_message(filters.text)
 async def my_handler(client, message):
     tgid = message.from_user.id
     text = str(message.text)
+    is_admin = IsAdmin(tgid=tgid)
+    global tg_group_members
+    is_in_channel = tg_group_members is not None and tgid in tg_group_members.keys()
+    is_in_group = tg_channel_members is not None and tgid in tg_channel_members.keys()
+
+    if text.split(' ')[0] not in allowed_commands(is_admin):
+        await message.reply('未知命令')
+        return
+
+    if not is_in_group:
+        await refresh_group_members()
+        is_in_group = tg_group_members is not None and tgid in tg_group_members.keys()
+
+    if not is_in_group and not is_in_channel:
+        await refresh_channel_members()
+        is_in_channel = tg_channel_members is not None and tgid in tg_channel_members.keys()
+
+    if not is_in_channel and not is_in_group:
+        await message.reply(group_enter_message)
+        return
+
     if str(text) == '/new_code' or text == f'/new_code{bot_name}':
         re = await CreateCode(tgid=tgid)
         if re == 'A':
@@ -597,7 +656,7 @@ async def my_handler(client, message):
                 elif re == 'C':
                     await message.reply('您还未获得注册资格')
                 elif re == 'B':
-                    await message.reply('请输入用户名，用户名不要包含空格')
+                    await message.reply('用户名非法')
                 elif re == 'D':
                     await message.reply('该用户名已被使用')
                 else:
@@ -618,7 +677,7 @@ async def my_handler(client, message):
         replyid = IsReply(message=message)
         if replyid != False:
             re = userinfo(tgid=replyid)
-            if IsAdmin(tgid=tgid):
+            if is_admin:
                 if re == 'NotInTheDatabase':
                     await message.reply('用户未入库，无信息')
                 elif re[0] == 'HaveAnEmby':
@@ -640,7 +699,7 @@ async def my_handler(client, message):
             elif re[0] == 'NotHaveAnEmby':
                 await message.reply(f'此用户没有emby账号，可注册：{re[1]}')
     elif str(text) == '/library_refresh':
-        if IsAdmin(tgid=tgid):
+        if is_admin:
             requests.post(embyurl + '/Library/Refresh',
                           headers={
                               'accept': 'application/json',
@@ -652,12 +711,12 @@ async def my_handler(client, message):
     elif str(text) == '/help' or str(text) == '/start' or text == f'/start{bot_name}' or text == f'/help{bot_name}':
         help_message = '用户命令：\n'\
                        '/invite + 邀请码 使用邀请码获取创建账号资格\n'\
-                       '/create + 用户名 创建用户（用户名不可包含空格）\n'\
+                       '/create + 用户名 创建用户（只允许英文、下划线，最低5位）\n'\
                        '/info 查看用户信息（仅可查看自己的信息）\n'\
                        '/line 查看线路\n'\
                        '/count 查看服务器内片子数量\n'\
                        '/help 输出本帮助\n'
-        if IsAdmin(tgid=tgid):
+        if is_admin:
             help_message += '管理命令：\n'\
                             '/library_refresh 刷新媒体库 \n'\
                             '/new_code 创建新的邀请码 \n'\
