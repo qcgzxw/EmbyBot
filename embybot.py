@@ -24,8 +24,8 @@ pd_invite_code = None
 pd_config = None
 pd_user = None
 
-tg_group_members = None
-tg_channel_members = None
+tg_group_members = {}
+tg_channel_members = {}
 
 
 def db_execute(raw=''):
@@ -559,8 +559,6 @@ async def refresh_group_members():
     async for member in app.get_chat_members(groupid):
         if not member.user.is_restricted:
             tg_group_members[member.user.id] = member
-        print(member)
-    print(tg_group_members)
 
 
 async def refresh_channel_members():
@@ -572,8 +570,6 @@ async def refresh_channel_members():
     async for member in app.get_chat_members(channelid):
         if not member.user.is_restricted:
             tg_channel_members[member.user.id] = member
-        print(member)
-    print(tg_channel_members)
 
 
 def allowed_commands(is_admin=False):
@@ -599,13 +595,16 @@ async def my_handler(client, message):
         await refresh_group_members()
         is_in_group = tg_group_members is not None and tgid in tg_group_members.keys()
 
-    if not is_in_group and not is_in_channel:
-        await refresh_channel_members()
-        is_in_channel = tg_channel_members is not None and tgid in tg_channel_members.keys()
+        if not is_in_channel:
+            await refresh_channel_members()
+            is_in_channel = tg_channel_members is not None and tgid in tg_channel_members.keys()
 
     if not is_in_channel and not is_in_group:
         await message.reply(group_enter_message)
         return
+
+    if not is_in_channel:
+        await message.reply(channel_enter_message)
 
     if str(text) == '/new_code' or text == f'/new_code{bot_name}':
         re = await CreateCode(tgid=tgid)
