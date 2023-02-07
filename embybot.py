@@ -2,6 +2,7 @@ import asyncio
 import re
 
 from pyrogram import Client, filters
+from pyrogram.types import Message
 import requests
 import json
 import string
@@ -248,7 +249,7 @@ def userinfo(tgid=0):
         return 'NotHaveAnEmby', canrig
 
 
-def prichat(message=''):
+def prichat(message: Message):
     if str(message.chat.type) == 'ChatType.PRIVATE':
         return True
     else:
@@ -553,52 +554,55 @@ def ItemsCount():
 async def refresh_group_members():
     global tg_group_members
     tg_group_members = {}
-    if groupid == -100:
+    if len(groupid) == 0:
         return
 
-    async for member in app.get_chat_members(groupid):
-        if not member.user.is_restricted:
-            tg_group_members[member.user.id] = member
+    for group_id in groupid:
+        async for member in app.get_chat_members(group_id):
+            if not member.user.is_restricted:
+                tg_group_members[member.user.id] = member
 
 
 async def refresh_channel_members():
     global tg_channel_members
     tg_channel_members = {}
-    if channelid == -100:
+    if len(channelid) == 0:
         return
 
-    async for member in app.get_chat_members(channelid):
-        if not member.user.is_restricted:
-            tg_channel_members[member.user.id] = member
+    for channel_id in channelid:
+        async for member in app.get_chat_members(channel_id):
+            if not member.user.is_restricted:
+                tg_channel_members[member.user.id] = member
 
 
 def allowed_commands(is_admin=False):
-    common_commands = ['/invite', '/create', '/info', '/bind', '/line', '/count', '/help']
+    common_commands = ['/invite', '/create', '/info', '/line', '/count', '/help']
     admin_commands = ['/library_refresh', '/new_code', '/register_all_time', '/register_all_user', '/info', '/ban_emby', '/unban_emby']
     return common_commands if not is_admin else common_commands+admin_commands
 
 
 @app.on_message(filters.text)
-async def my_handler(client, message):
+async def my_handler(client: Client, message: Message):
     tgid = message.from_user.id
     text = str(message.text)
     is_admin = IsAdmin(tgid=tgid)
-    global tg_group_members
-    is_in_channel = tg_group_members is not None and tgid in tg_group_members.keys()
-    is_in_group = tg_channel_members is not None and tgid in tg_channel_members.keys()
+    if message.new_chat_members or message.left_chat_member:
+        await refresh_group_members()
+        await refresh_channel_members()
+        return
+
+    if not prichat(message):
+        # 非私聊信息
+        return
 
     if text.split(' ')[0] not in allowed_commands(is_admin):
         await message.reply('未知命令')
         return
 
-    if not is_in_group:
-        await refresh_group_members()
-        is_in_group = tg_group_members is not None and tgid in tg_group_members.keys()
-
-        if not is_in_channel:
-            await refresh_channel_members()
-            is_in_channel = tg_channel_members is not None and tgid in tg_channel_members.keys()
-
+    global tg_group_members
+    global tg_channel_members
+    is_in_channel = tg_group_members is not None and tgid in tg_group_members.keys()
+    is_in_group = tg_channel_members is not None and tgid in tg_channel_members.keys()
     if not is_in_channel and not is_in_group:
         await message.reply(group_enter_message)
         return
@@ -637,7 +641,7 @@ async def my_handler(client, message):
             await message.reply('请勿在群组使用该命令')
     elif str(text).find('/create') == 0:
         if str(text) == '/create':
-            await message.reply('请输入用户名')
+            await message.reply('请输入用户名，例如：/create embyplus')
 
         elif str(text) == '/create_code':
             pass
@@ -768,13 +772,10 @@ async def my_handler(client, message):
         else:
             await message.reply('请回复一条消息使用该命令')
     elif text == '/line' or text == f'/line{bot_name}':
-        if prichat(message=message):
-            if hadname(tgid=tgid) == 'B':
-                await message.reply(line, disable_web_page_preview=True)
-            else:
-                await message.reply('无Emby账号无法查看线路')
+        if hadname(tgid=tgid) == 'B':
+            await message.reply(line, disable_web_page_preview=True)
         else:
-            await message.reply('请勿在群组中使用此命令')
+            await message.reply('无Emby账号无法查看线路')
     elif text.find('/求片') == 0:
         text = text.split(' ')
         url = text[1]
