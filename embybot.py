@@ -551,25 +551,25 @@ def ItemsCount():
     return MovieCount, SeriesCount, EpisodeCount
 
 
-async def refresh_group_members():
+async def refresh_group_members(groupids=[]):
     global tg_group_members
     tg_group_members = {}
-    if len(groupid) == 0:
+    if len(groupids) == 0:
         return
 
-    for group_id in groupid:
+    for group_id in groupids:
         async for member in app.get_chat_members(group_id):
             if not member.user.is_restricted:
                 tg_group_members[member.user.id] = member
 
 
-async def refresh_channel_members():
+async def refresh_channel_members(channelids=[]):
     global tg_channel_members
     tg_channel_members = {}
-    if len(channelid) == 0:
+    if len(channelids) == 0:
         return
 
-    for channel_id in channelid:
+    for channel_id in channelids:
         async for member in app.get_chat_members(channel_id):
             if not member.user.is_restricted:
                 tg_channel_members[member.user.id] = member
@@ -581,19 +581,17 @@ def allowed_commands(is_admin=False):
     return common_commands if not is_admin else common_commands+admin_commands
 
 
-@app.on_message(filters.text)
+@app.on_message(filters.left_chat_member | filters.new_chat_members)
+async def my_handler(client: Client, message: Message):
+        await refresh_group_members(groupid)
+        await refresh_channel_members(channelid)
+
+
+@app.on_message(filters.text & filters.private)
 async def my_handler(client: Client, message: Message):
     tgid = message.from_user.id
     text = str(message.text)
     is_admin = IsAdmin(tgid=tgid)
-    if message.new_chat_members or message.left_chat_member:
-        await refresh_group_members()
-        await refresh_channel_members()
-        return
-
-    if not prichat(message):
-        # 非私聊信息
-        return
 
     if text.split(' ')[0] not in allowed_commands(is_admin):
         await message.reply('未知命令')
@@ -793,4 +791,9 @@ async def my_handler(client: Client, message: Message):
         await message.reply(f'🎬电影数量：{re[0]}\n📽️剧集数量：{re[1]}\n🎞️总集数：{re[2]}')
 
 
-app.run()
+async def main():
+    async with app:
+        await refresh_group_members(groupid)
+        await refresh_channel_members(channelid)
+
+app.run(main())
