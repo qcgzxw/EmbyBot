@@ -1,7 +1,7 @@
 import asyncio
 import re
 
-from pyrogram import Client, filters
+from pyrogram import Client, filters, idle
 from pyrogram.types import Message
 import requests
 import json
@@ -13,7 +13,6 @@ import uuid
 import random
 from datetime import datetime, timedelta
 from config import *
-
 
 app = Client("my_bot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)  # create tg bot
 engine = create_engine(
@@ -577,14 +576,15 @@ async def refresh_channel_members(channelids=[]):
 
 def allowed_commands(is_admin=False):
     common_commands = ['/invite', '/create', '/info', '/line', '/count', '/help']
-    admin_commands = ['/library_refresh', '/new_code', '/register_all_time', '/register_all_user', '/info', '/ban_emby', '/unban_emby']
-    return common_commands if not is_admin else common_commands+admin_commands
+    admin_commands = ['/library_refresh', '/new_code', '/register_all_time', '/register_all_user', '/info', '/ban_emby',
+                      '/unban_emby']
+    return common_commands if not is_admin else common_commands + admin_commands
 
 
 @app.on_message(filters.left_chat_member | filters.new_chat_members)
 async def my_handler(client: Client, message: Message):
-        await refresh_group_members(groupid)
-        await refresh_channel_members(channelid)
+    await refresh_group_members(groupid)
+    await refresh_channel_members(channelid)
 
 
 @app.on_message(filters.text & filters.private)
@@ -661,7 +661,8 @@ async def my_handler(client: Client, message: Message):
                 elif re == 'D':
                     await message.reply('该用户名已被使用')
                 else:
-                    await message.reply(f'创建成功，账号<code>{re[0]}</code>，初始密码为<code>{re[1]}</code>，密码不进行保存，请尽快登陆修改密码')
+                    await message.reply(
+                        f'创建成功，账号<code>{re[0]}</code>，初始密码为<code>{re[1]}</code>，密码不进行保存，请尽快登陆修改密码')
             else:
                 await message.reply('请勿在群组使用该命令')
     elif str(text).find('/register_all_time') == 0:
@@ -710,21 +711,21 @@ async def my_handler(client: Client, message: Message):
                           )
         await message.reply("媒体库刷新中...")
     elif str(text) == '/help' or str(text) == '/start' or text == f'/start{bot_name}' or text == f'/help{bot_name}':
-        help_message = '用户命令：\n'\
-                       '/invite + 邀请码 使用邀请码获取创建账号资格\n'\
-                       '/create + 用户名 创建用户（只允许英文、下划线，最低5位）\n'\
-                       '/info 查看用户信息（仅可查看自己的信息）\n'\
-                       '/line 查看线路\n'\
-                       '/count 查看服务器内片子数量\n'\
+        help_message = '用户命令：\n' \
+                       '/invite + 邀请码 使用邀请码获取创建账号资格\n' \
+                       '/create + 用户名 创建用户（只允许英文、下划线，最低5位）\n' \
+                       '/info 查看用户信息（仅可查看自己的信息）\n' \
+                       '/line 查看线路\n' \
+                       '/count 查看服务器内片子数量\n' \
                        '/help 输出本帮助\n'
         if is_admin:
-            help_message += '管理命令：\n'\
-                            '/library_refresh 刷新媒体库 \n'\
-                            '/new_code 创建新的邀请码 \n'\
-                            '/register_all_time + 时间（分）开放注册，时长为指定时间\n'\
-                            '/register_all_user + 人数 开放指定数量的注册名额\n'\
-                            '/info 回复一位用户，查看他的信息\n'\
-                            '/ban_emby 禁用一位用户的Emby账号\n'\
+            help_message += '管理命令：\n' \
+                            '/library_refresh 刷新媒体库 \n' \
+                            '/new_code 创建新的邀请码 \n' \
+                            '/register_all_time + 时间（分）开放注册，时长为指定时间\n' \
+                            '/register_all_user + 人数 开放指定数量的注册名额\n' \
+                            '/info 回复一位用户，查看他的信息\n' \
+                            '/ban_emby 禁用一位用户的Emby账号\n' \
                             '/unban_emby 解禁一位用户的Emby账户'
         await message.reply(help_message)
     elif str(text).find('/register_all_user') == 0:
@@ -748,7 +749,8 @@ async def my_handler(client: Client, message: Message):
             elif re[0] == 'B':
                 await message.reply('请勿随意使用管理员命令')
             elif re[0] == 'C':
-                await message.reply(f'用户<a href="tg://user?id={replyid}">{replyid}</a>没有Emby账号，但是已经取消了他的注册资格')
+                await message.reply(
+                    f'用户<a href="tg://user?id={replyid}">{replyid}</a>没有Emby账号，但是已经取消了他的注册资格')
             elif re[0] == 'D':
                 await message.reply(f'用户<a href="tg://user?id={replyid}">{replyid}</a>没有Emby账号，也没有注册资格')
         else:
@@ -795,5 +797,6 @@ async def main():
     async with app:
         await refresh_group_members(groupid)
         await refresh_channel_members(channelid)
+        await idle()
 
 app.run(main())
