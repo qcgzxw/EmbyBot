@@ -839,7 +839,7 @@ async def create_command(client: Client, message: Message):
 
 @app.on_message(filters.command('invite') & filters.private)
 async def invite_command(client: Client, message: Message):
-    result = await invite(message.text)
+    result = await invite(message)
     if result == 'A':
         await message.reply('没有找到这个邀请码')
     if result == 'B':
@@ -877,7 +877,6 @@ async def info_command(client: Client, message: Message):
         if result == 'NotInTheDatabase':
             await message.reply('用户未入库，无信息')
         elif result[0] == 'HaveAnEmby':
-            await message.reply('用户信息已私发，请查看')
             await app.send_message(chat_id=message.from_user.id,
                                    text=f'用户<a href="tg://user?id={message.from_user.id}">{message.from_user.id}</a>的信息\n'
                                         f'Emby Name: {result[1]}\n'
