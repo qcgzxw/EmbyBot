@@ -3,6 +3,7 @@ import re
 
 from pyrogram import Client, filters, idle
 from pyrogram.types import Message
+from pyrogram.enums import ChatMemberStatus
 import requests
 import json
 import string
@@ -25,6 +26,7 @@ pd_config = None
 pd_user = None
 
 tg_group_members = {}
+tg_group_administrators = {}
 tg_channel_members = {}
 
 
@@ -53,6 +55,11 @@ def IsAdmin(telegram_id: int):  # TODO change it in database
     return False
 
 
+def IsGroupAdmin(telegram_id: int):
+    global tg_group_administrators
+    return telegram_id in tg_group_administrators.keys()
+
+
 def LocalTime(time=''):
     n_LastLogin = time[0:19]
     UTC_FORMAT = "%Y-%m-%dT%H:%M:%S"
@@ -68,8 +75,8 @@ def ReplyToMessageFromUserId(message: Message) -> int:
 
 
 async def CreateCode(telegram_id: int):
-    if IsAdmin(telegram_id):  # If you are administrator, you can create a code
-        code = f'register-{str(uuid.uuid4())}'
+    if IsAdmin(telegram_id) or IsGroupAdmin(telegram_id):  # If you are administrator, you can create a code
+        code = f'embyplus-{str(uuid.uuid4())}'
         df_write = pd.DataFrame({'code': code, 'tgid': telegram_id, 'time': int(time.time()), 'used': 'F'}, index=[0])
         pd_to_sql(df_write, 'invite_code', index=False, if_exists='append')
         return code
@@ -663,12 +670,15 @@ def ItemsCount():
 
 async def refresh_group_members(groupids=[]):
     global tg_group_members
+    global tg_group_administrators
     tg_group_members = {}
     if len(groupids) == 0:
         return
 
     for group_id in groupids:
         async for member in app.get_chat_members(group_id):
+            if member.status in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER]:
+                tg_group_administrators[member.user.id] = member.status
             if not member.user.is_restricted:
                 tg_group_members[member.user.id] = member
 
@@ -686,7 +696,7 @@ async def refresh_channel_members(channelids=[]):
 
 
 def allowed_commands(is_admin=False):
-    common_commands = ['/invite', '/create', '/info', '/line', '/count', '/help']
+    common_commands = ['/invite', '/create', '/info', '/line', '/reset_emby_password', '/count', '/help']
     admin_commands = ['/library_refresh', '/new_code', '/register_all_time', '/register_all_user', '/info', '/ban_emby',
                       '/unban_emby']
     return common_commands if not is_admin else common_commands + admin_commands
@@ -695,11 +705,15 @@ def allowed_commands(is_admin=False):
 ####
 ## custom filters
 ####
-async def func(_, __, message: Message):
+async def filter_admin_func(_, __, message: Message):
     return IsAdmin(message.from_user.id)
 
 
-filter_admin = filters.create(func)
+async def filter_group_admin_func(_, __, message: Message):
+    return IsGroupAdmin(message.from_user.id)
+
+filter_admin = filters.create(filter_admin_func)
+filter_group_admin = filters.create(filter_group_admin_func)
 
 
 ####
@@ -714,14 +728,23 @@ async def my_handler(client: Client, message: Message):
 ####
 ## group command
 ####
-@app.on_message(filters.command('new_code') & filter_admin)
+@app.on_message(filters.command('new_code') & filter_group_admin)
 async def new_code_command(client: Client, message: Message):
-    result = await CreateCode(telegram_id=message.from_user.id)
     reply_from_user_id = ReplyToMessageFromUserId(message=message)
     if reply_from_user_id == 0:
-        await message.reply('邀请码生成成功')
-        await app.send_message(chat_id=message.from_user.id, text=f'生成成功，邀请码<code>{result}</code>')
+        if prichat(message):
+            result = await CreateCode(telegram_id=message.from_user.id)
+            await message.reply(text=f'生成成功，邀请码\r\n<code>{result}</code>')
+        else:
+            total = 1
+            if len(message.text.split(' ')) > 1:
+                total = int(message.text.split(' ')[-1])
+            for i in range(total):
+                result = await CreateCode(telegram_id=message.from_user.id)
+                await app.send_message(chat_id=message.chat.id, text=f'生成成功，邀请码\r\n<code>{result}</code>\r\n'
+                                                                     f'如果已使用该邀请码请回复本条消息方便其他人')
     else:
+        result = await CreateCode(telegram_id=message.from_user.id)
         await message.reply('已为这个用户生成邀请码')
         await app.send_message(chat_id=reply_from_user_id, text=f'生成成功，邀请码<code>{result}</code>')
         await app.send_message(
@@ -754,7 +777,7 @@ async def register_all_user_command(client: Client, message: Message):
         await message.reply(f"注册已开放，本次共有{result}个名额")
 
 
-@app.on_message(filters.command(['ban_emby']) & filter_admin)
+@app.on_message(filters.command(['ban_emby']) & filter_group_admin)
 async def ban_emby_command(client: Client, message: Message):
     reply_to_message_from_user_id = ReplyToMessageFromUserId(message)
     if reply_to_message_from_user_id > 0:
@@ -906,6 +929,7 @@ async def help_command(client: Client, message: Message):
                    '/create + 用户名 创建用户（只允许英文、下划线，最低5位）\n' \
                    '/info 查看用户信息（仅可查看自己的信息）\n' \
                    '/line 查看线路\n' \
+                   '/reset_emby_password 重置emby账号\n' \
                    '/count 查看服务器内片子数量\n' \
                    '/help 输出本帮助\n'
     if IsAdmin(message.from_user.id):
@@ -920,12 +944,40 @@ async def help_command(client: Client, message: Message):
     await message.reply(help_message)
 
 
-@app.on_message(filters.command('line'))
+@app.on_message(filters.command('line') & filters.private)
 async def line_command(client: Client, message: Message):
     if hadname(message.from_user.id) == 'B':
         await message.reply(line, disable_web_page_preview=True)
     else:
         await message.reply('无Emby账号无法查看线路')
+
+
+@app.on_message(filters.command('reset_emby_password') & filters.private)
+async def reset_emby_password_command(client: Client, message: Message):
+    if hadname(message.from_user.id) == 'B':
+        pd_user = pd_read_sql_query('SELECT * FROM user;')
+        tgid_find = (pd_user['tgid'] == message.from_user.id)
+        emby_id = (pd_user[tgid_find]['emby_id'])
+        emby_id = emby_id.to_list()
+        emby_id = emby_id[-1]
+
+        data = '{"ResetPassword" : true}'
+        r = requests.post(f"{embyurl}/emby/users/{emby_id}/Password?api_key={embyapi}", headers={
+            'accept': 'application/json',
+            'Content-Type': 'application/json',
+        }, data=data)
+
+        newPw = ''.join(random.sample(string.ascii_letters + string.digits, 8))
+        data = '{"CurrentPw":"" , "NewPw":"' + newPw + '","ResetPassword" : false}'
+        r = requests.post(f"{embyurl}/emby/users/{emby_id}/Password?api_key={embyapi}", headers={
+                      'accept': 'application/json',
+                      'Content-Type': 'application/json',
+                  }, data=data)
+        await message.reply(
+            f'重置成功，新密码为<code>{newPw}</code>，密码不进行保存，请尽快登陆修改密码'
+        )
+    else:
+        await message.reply('无Emby账号')
 
 
 @app.on_message(filters.command('count'))
