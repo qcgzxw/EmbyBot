@@ -1010,7 +1010,7 @@ async def qiupian_command(client: Client, message: Message):
 async def diy_reply(client: Client, message: Message):
     reply_msg = {'6': ('sb', 'SB', '傻逼')}
     msg = str(message.text)
-    for msg in reply_msg.keys():
+    if msg in reply_msg.keys():
         await message.reply(random.choice(reply_msg[msg]))
 
 
