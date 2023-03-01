@@ -1006,6 +1006,14 @@ async def qiupian_command(client: Client, message: Message):
         )
 
 
+@app.on_message(filters.text & filters.group)
+async def diy_reply(client: Client, message: Message):
+    reply_msg = {'6': ('sb', 'SB', '傻逼')}
+    msg = str(message.text)
+    for msg in reply_msg.keys():
+        await message.reply(random.choice(reply_msg[msg]))
+
+
 @app.on_message(filters.text & filters.private)
 async def my_handler(client: Client, message: Message):
     tgid = message.from_user.id
