@@ -721,8 +721,18 @@ filter_group_admin = filters.create(filter_group_admin_func)
 ####
 @app.on_message(filters.left_chat_member | filters.new_chat_members)
 async def my_handler(client: Client, message: Message):
-    await refresh_group_members(groupid)
-    await refresh_channel_members(channelid)
+    global tg_group_members
+    if message.new_chat_members is not None and len(message.new_chat_members) > 0:
+        for new_chat_member in message.new_chat_members:
+            if new_chat_member \
+                    and not new_chat_member.is_self \
+                    and new_chat_member.id not in tg_group_members.keys():
+                tg_group_members[new_chat_member.id] = new_chat_member
+    if message.left_chat_member:
+        if message.left_chat_member.id \
+                and not message.left_chat_member.is_self \
+                and message.left_chat_member.id in tg_group_members.keys():
+            del tg_group_members[message.left_chat_member.id]
 
 
 ####
