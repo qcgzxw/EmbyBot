@@ -760,8 +760,7 @@ async def new_code_command(client: Client, message: Message):
             for i in range(total):
                 invite_code = await CreateCode(telegram_id=message.from_user.id)
                 msg = await app.send_message(chat_id=message.chat.id,
-                                             text=f'生成成功，邀请码\r\n<code>{invite_code}</code>\r\n'
-                                                  f'如果已使用该邀请码请回复本条消息方便其他人')
+                                             text=f'生成成功，邀请码\r\n<code>{invite_code}</code>')
                 if msg is not None:
                     group_invite_messages[invite_code] = (message.chat.id, msg.id)
     else:
