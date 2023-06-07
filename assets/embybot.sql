@@ -76,6 +76,7 @@ DROP TABLE IF EXISTS `user`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `user` (
   `tgid` bigint(20) NOT NULL,
+  `tgname` varchar(100) DEFAULT NULL,
   `admin` char(50) NOT NULL,
   `emby_name` varchar(50) NOT NULL DEFAULT 'None',
   `emby_id` varchar(50) NOT NULL DEFAULT '0',

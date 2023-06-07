@@ -123,7 +123,12 @@ async def invite(message: Message):
         try:
             tgid = int(pd_user[tgid_find]['tgid'])  # find the tgid if the user is in the databse
         except TypeError:
-            df_write = pd.DataFrame({'tgid': tgid, 'admin': 'F', 'canrig': 'T'}, index=[0])
+            df_write = pd.DataFrame({
+                'tgid': tgid,
+                'tgname': message.from_user.username if message.from_user.username else tgid,
+                'admin': 'F',
+                'canrig': 'T'
+            }, index=[0])
             pd_to_sql(df_write, 'user', index=False, if_exists='append')  # add the user info
             pd_invite_code = pd_read_sql_query('SELECT * FROM invite_code;')
             pd_user = pd_read_sql_query('SELECT * FROM user;')
@@ -460,9 +465,14 @@ async def create(message: Message):  # register with invite code
         tgid_a = int(pd_user[tgid_find][
                          'tgid'])  # find the tgid if the user is in the databse
     except TypeError:
-        df_write = pd.DataFrame(
-            {'tgid': tgid, 'admin': 'F', 'emby_name': str(r['Name']),
-             'emby_id': str(r['Id']), 'canrig': 'F'}, index=[0])
+        df_write = pd.DataFrame({
+            'tgid': tgid,
+            'tgname': message.from_user.username if message.from_user.username else tgid,
+            'admin': 'F',
+            'emby_name': str(r['Name']),
+             'emby_id': str(r['Id']),
+            'canrig': 'F'
+        }, index=[0])
         pd_to_sql(df_write, 'user', index=False, if_exists='append')  # add the user info
         return r['Name'], NewPw
     sqlemby_name = f"UPDATE `{db_name}`.`user` SET `emby_name`='{r['Name']}' WHERE `tgid`='{tgid}';"
@@ -543,9 +553,14 @@ async def create_time(message: Message):
         try:
             tgid_a = int(pd_user[tgid_find]['tgid'])  # find the tgid if the user is in the databse
         except TypeError:
-            df_write = pd.DataFrame(
-                {'tgid': tgid, 'admin': 'F', 'emby_name': str(r['Name']), 'emby_id': str(r['Id']), 'canrig': 'F'},
-                index=[0])
+            df_write = pd.DataFrame({
+                'tgid': tgid,
+                'tgname': message.from_user.username if message.from_user.username else tgid,
+                'admin': 'F',
+                'emby_name': str(r['Name']),
+                'emby_id': str(r['Id']),
+                'canrig': 'F'
+            }, index=[0])
             pd_to_sql(df_write, 'user', index=False, if_exists='append')  # add the user info
             return r['Name'], NewPw
         sqlemby_name = f"UPDATE `{db_name}`.`user` SET `emby_name`='{r['Name']}' WHERE `tgid`='{tgid}';"
@@ -630,9 +645,13 @@ async def create_user(message: Message):
         try:
             tgid_a = int(pd_user[tgid_find]['tgid'])  # find the tgid if the user is in the databse
         except TypeError:
-            df_write = pd.DataFrame(
-                {'tgid': tgid, 'admin': 'F', 'emby_name': str(r['Name']), 'emby_id': str(r['Id']), 'canrig': 'F'},
-                index=[0])
+            df_write = pd.DataFrame({
+                'tgid': tgid,
+                'tgname': message.from_user.username if message.from_user.username else tgid,
+                'admin': 'F',
+                'emby_name': str(r['Name']),
+                'emby_id': str(r['Id']),
+                'canrig': 'F'}, index=[0])
             pd_to_sql(df_write, 'user', index=False, if_exists='append')  # add the user info
             write_config(config='register_public_user', params=register_public_user - 1)
             return r['Name'], NewPw
@@ -756,7 +775,10 @@ async def new_code_command(client: Client, message: Message):
             total = 1
             if len(message.text.split(' ')) > 1:
                 total = int(message.text.split(' ')[-1])
-            global group_invite_messages
+                if total > 20:
+                    await message.reply('一次最多生成20个邀请码')
+                    return
+                global group_invite_messages
             for i in range(total):
                 invite_code = await CreateCode(telegram_id=message.from_user.id)
                 msg = await app.send_message(chat_id=message.chat.id,
@@ -800,6 +822,15 @@ async def register_all_user_command(client: Client, message: Message):
 @app.on_message(filters.command(['ban_emby']) & filter_group_admin)
 async def ban_emby_command(client: Client, message: Message):
     reply_to_message_from_user_id = ReplyToMessageFromUserId(message)
+    ban_reason = "管理员封禁"
+    if len(message.text.split(' ')) > 1:
+        if len(message.text.split(' ')) == 2:
+            message = str(message.text).split(' ')
+            reply_to_message_from_user_id = int(message[1])
+        if len(message.text.split(' ')) == 3:
+            message = str(message.text).split(' ')
+            reply_to_message_from_user_id = int(message[1])
+            ban_reason = message[2]
     if reply_to_message_from_user_id > 0:
         result = await BanEmby(message, reply_to_message_from_user_id)
         if result[0] == 'A':
@@ -811,7 +842,7 @@ async def ban_emby_command(client: Client, message: Message):
                     text=f'#Ban\n'
                          f'用户：<a href="tg://user?id={reply_to_message_from_user_id}">{reply_to_message_from_user_id}</a>\n'
                          f'Emby账号：{result[1]}\n'
-                         f'原因：管理员封禁'
+                         f'原因：{ban_reason}'
                 )
         elif result[0] == 'B':
             await message.reply('请勿随意使用管理员命令')
@@ -828,6 +859,9 @@ async def ban_emby_command(client: Client, message: Message):
 @app.on_message(filters.command(['unban_emby']) & filter_admin)
 async def unban_emby_command(client: Client, message: Message):
     reply_to_message_from_user_id = ReplyToMessageFromUserId(message)
+    if reply_to_message_from_user_id == 0 and len(message.text.split(' ')) > 1:
+        message = str(message.text).split(' ')
+        reply_to_message_from_user_id = int(message[-1])
     if reply_to_message_from_user_id > 0:
         result = await UnbanEmby(message, reply_to_message_from_user_id)
         if result[0] == 'A':
@@ -1028,10 +1062,13 @@ async def qiupian_command(client: Client, message: Message):
 
 @app.on_message(filters.text & filters.group)
 async def diy_reply(client: Client, message: Message):
-    reply_msg = {'6': ('sb', 'SB', '傻逼')}
+    reply_msg = config.diy_reply
     msg = str(message.text)
     if msg in reply_msg.keys():
-        await message.reply(random.choice(reply_msg[msg]))
+        if type(reply_msg[msg]) == str:
+            await message.reply(reply_msg[msg])
+        elif type(reply_msg[msg]) == list or type(reply_msg[msg]) == tuple:
+            await message.reply(random.choice(reply_msg[msg]))
 
 
 @app.on_message(filters.text & filters.private)
