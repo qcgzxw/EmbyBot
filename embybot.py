@@ -1042,7 +1042,7 @@ async def qiupian_command(client: Client, message: Message):
 
 @app.on_message(filters.text & filters.group)
 async def diy_reply(client: Client, message: Message):
-    reply_msg = config.diy_reply
+    reply_msg = diy_msg
     msg = str(message.text)
     if msg in reply_msg.keys():
         if type(reply_msg[msg]) == str:
@@ -1062,9 +1062,6 @@ async def my_handler(client: Client, message: Message):
     if not is_in_channel and not is_in_group:
         await message.reply(group_enter_message)
         return
-
-    if not is_in_channel:
-        await message.reply(channel_enter_message)
 
 
 async def main():
