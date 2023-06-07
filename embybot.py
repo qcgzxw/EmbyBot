@@ -95,8 +95,8 @@ async def invite(message: Message):
         return 'D'  # have an account or have the chance to register
     pd_invite_code = pd_read_sql_query('SELECT * FROM invite_code;')
     pd_user = pd_read_sql_query('SELECT * FROM user;')
-    message = str(message.text).split(' ')
-    code = message[-1]  # get the code
+    messageArr = str(message.text).split(' ')
+    code = messageArr[-1]  # get the code
     code_find = (pd_invite_code['code'] == code)
     code = (pd_invite_code[code_find]['code'])
     code = code.to_list()
@@ -188,10 +188,10 @@ def hadname(telegram_id: int):
 # TODO put the time into the database
 async def register_all_time(message: Message):  # public register
     if IsAdmin(message.from_user.id):
-        message = str(message.text).split(' ')
-        if len(message) == 1:
+        messageArr = str(message.text).split(' ')
+        if len(messageArr) == 1:
             return 'B'
-        message = message[-1]
+        message = messageArr[-1]
         write_config(config='register_public', params='True')
         write_config(config='register_public_time', params=str(int(time.time()) + (int(message) * 60)))
         write_config(config='register_method', params='Time')
@@ -203,10 +203,10 @@ async def register_all_time(message: Message):  # public register
 # TODO put the user into the database
 async def register_all_user(message: Message):
     if IsAdmin(message.from_user.id):
-        message = str(message.text).split(' ')
-        if len(message) == 1:
+        messageArr = str(message.text).split(' ')
+        if len(messageArr) == 1:
             return 'B'
-        message = message[-1]
+        message = messageArr[-1]
 
         write_config(config='register_public', params='True')
         write_config(config='register_public_user', params=str(int(message)))
@@ -409,8 +409,8 @@ async def create(message: Message):  # register with invite code
         return 'A'  # already have an account
     if canrig(message.from_user.id) != 'B':
         return 'C'  # cannot register
-    message = str(message.text).split(' ')
-    name = message[-1]
+    messageArr = str(message.text).split(' ')
+    name = messageArr[-1]
     name = "" if re.match('[a-zA-Z0-9_-]+', name) is None else re.match('[a-zA-Z0-9_-]+', name).group()
     if name == '' or len(name) < 5:
         return 'B'  # do not input a name
@@ -496,8 +496,8 @@ async def create_time(message: Message):
         pd_user = pd_read_sql_query('SELECT * FROM user;')
         if hadname(tgid) == 'B':
             return 'A'  # already have an account
-        message = str(message.text).split(' ')
-        name = message[-1]
+        messageArr = str(message.text).split(' ')
+        name = messageArr[-1]
         if name == '' or name == ' ':
             return 'B'  # do not input a name
         data = '{"Name":"' + name + '","HasPassword":true}'
@@ -588,8 +588,8 @@ async def create_user(message: Message):
         pd_user = pd_read_sql_query('SELECT * FROM user;')
         if hadname(message.from_user.id) == 'B':
             return 'A'  # already have an account
-        message = str(message.text).split(' ')
-        name = message[-1]
+        messageArr = str(message.text).split(' ')
+        name = messageArr[-1]
         if name == '' or name == ' ':
             return 'B'  # do not input a name
         data = '{"Name":"' + name + '","HasPassword":true}'
@@ -704,8 +704,7 @@ async def refresh_group_members(groupids=[]):
         async for member in app.get_chat_members(group_id):
             if member.status in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER]:
                 tg_group_administrators[member.user.id] = member.status
-            if not member.user.is_restricted:
-                tg_group_members[member.user.id] = member
+            tg_group_members[member.user.id] = member
 
 
 async def refresh_channel_members(channelids=[]):
@@ -716,8 +715,7 @@ async def refresh_channel_members(channelids=[]):
 
     for channel_id in channelids:
         async for member in app.get_chat_members(channel_id):
-            if not member.user.is_restricted:
-                tg_channel_members[member.user.id] = member
+            tg_channel_members[member.user.id] = member
 
 
 def allowed_commands(is_admin=False):
@@ -825,12 +823,12 @@ async def ban_emby_command(client: Client, message: Message):
     ban_reason = "管理员封禁"
     if len(message.text.split(' ')) > 1:
         if len(message.text.split(' ')) == 2:
-            message = str(message.text).split(' ')
-            reply_to_message_from_user_id = int(message[1])
+            messageArr = str(message.text).split(' ')
+            reply_to_message_from_user_id = int(messageArr[1])
         if len(message.text.split(' ')) == 3:
-            message = str(message.text).split(' ')
-            reply_to_message_from_user_id = int(message[1])
-            ban_reason = message[2]
+            messageArr = str(message.text).split(' ')
+            reply_to_message_from_user_id = int(messageArr[1])
+            ban_reason = messageArr[2]
     if reply_to_message_from_user_id > 0:
         result = await BanEmby(message, reply_to_message_from_user_id)
         if result[0] == 'A':
@@ -860,8 +858,8 @@ async def ban_emby_command(client: Client, message: Message):
 async def unban_emby_command(client: Client, message: Message):
     reply_to_message_from_user_id = ReplyToMessageFromUserId(message)
     if reply_to_message_from_user_id == 0 and len(message.text.split(' ')) > 1:
-        message = str(message.text).split(' ')
-        reply_to_message_from_user_id = int(message[-1])
+        messageArr = str(message.text).split(' ')
+        reply_to_message_from_user_id = int(messageArr[-1])
     if reply_to_message_from_user_id > 0:
         result = await UnbanEmby(message, reply_to_message_from_user_id)
         if result[0] == 'A':
