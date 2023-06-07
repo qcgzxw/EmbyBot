@@ -28,6 +28,7 @@ pd_user = None
 tg_group_members = {}
 tg_group_administrators = {}
 tg_channel_members = {}
+group_invite_messages = {}
 
 
 def db_execute(raw=''):
@@ -109,6 +110,11 @@ async def invite(message: Message):
     if used == 'T':
         return 'B'  # the code has been used
     else:
+        global group_invite_messages
+        if code in group_invite_messages.keys():
+            if len(group_invite_messages[code]) == 2:
+                await app.delete_messages(group_invite_messages[code][0], group_invite_messages[code][1])
+            del group_invite_messages[code]
         code_used = f"UPDATE `{db_name}`.`invite_code` SET `used`='T' WHERE `code`='{code}';"
         db_execute(code_used)  # set the code has been used
         pd_invite_code = pd_read_sql_query('SELECT * FROM invite_code;')
@@ -731,6 +737,7 @@ async def filter_admin_func(_, __, message: Message):
 async def filter_group_admin_func(_, __, message: Message):
     return IsGroupAdmin(message.from_user.id)
 
+
 filter_admin = filters.create(filter_admin_func)
 filter_group_admin = filters.create(filter_group_admin_func)
 
@@ -740,8 +747,18 @@ filter_group_admin = filters.create(filter_group_admin_func)
 ####
 @app.on_message(filters.left_chat_member | filters.new_chat_members)
 async def my_handler(client: Client, message: Message):
-    await refresh_group_members(groupid)
-    await refresh_channel_members(channelid)
+    global tg_group_members
+    if message.new_chat_members is not None and len(message.new_chat_members) > 0:
+        for new_chat_member in message.new_chat_members:
+            if new_chat_member \
+                    and not new_chat_member.is_self \
+                    and new_chat_member.id not in tg_group_members.keys():
+                tg_group_members[new_chat_member.id] = new_chat_member
+    if message.left_chat_member:
+        if message.left_chat_member.id \
+                and not message.left_chat_member.is_self \
+                and message.left_chat_member.id in tg_group_members.keys():
+            del tg_group_members[message.left_chat_member.id]
 
 
 ####
@@ -761,10 +778,13 @@ async def new_code_command(client: Client, message: Message):
                 if total > 20:
                     await message.reply('一次最多生成20个邀请码')
                     return
+                global group_invite_messages
             for i in range(total):
-                result = await CreateCode(telegram_id=message.from_user.id)
-                await app.send_message(chat_id=message.chat.id, text=f'生成成功，邀请码\r\n<code>{result}</code>\r\n'
-                                                                     f'如果已使用该邀请码请回复本条消息方便其他人')
+                invite_code = await CreateCode(telegram_id=message.from_user.id)
+                msg = await app.send_message(chat_id=message.chat.id,
+                                             text=f'生成成功，邀请码\r\n<code>{invite_code}</code>')
+                if msg is not None:
+                    group_invite_messages[invite_code] = (message.chat.id, msg.id)
     else:
         result = await CreateCode(telegram_id=message.from_user.id)
         await message.reply('已为这个用户生成邀请码')
@@ -1004,9 +1024,9 @@ async def reset_emby_password_command(client: Client, message: Message):
         newPw = ''.join(random.sample(string.ascii_letters + string.digits, 8))
         data = '{"CurrentPw":"" , "NewPw":"' + newPw + '","ResetPassword" : false}'
         r = requests.post(f"{embyurl}/emby/users/{emby_id}/Password?api_key={embyapi}", headers={
-                      'accept': 'application/json',
-                      'Content-Type': 'application/json',
-                  }, data=data)
+            'accept': 'application/json',
+            'Content-Type': 'application/json',
+        }, data=data)
         await message.reply(
             f'重置成功，新密码为<code>{newPw}</code>，密码不进行保存，请尽快登陆修改密码'
         )
