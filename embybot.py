@@ -390,7 +390,7 @@ async def UnbanEmby(message: Message, replyid=0):
             resp = requests.post(embyurl + '/emby/Users/' + emby_id + '/Policy',
                                  headers=headers,
                                  params=params, data=data)  # update policy
-            setbantime = f"UPDATE `{db_name}`.`user` SET `bantime`={0} WHERE `tgid`='{message.from_user.id}';"
+            setbantime = f"UPDATE `{db_name}`.`user` SET `bantime`={0} WHERE `tgid`='{tgid}';"
             db_execute(setbantime)  # update the status that cannot register
             return 'A', emby_name  # Unban the user's emby account
         else:
